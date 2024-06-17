@@ -1,0 +1,30 @@
+#This is config file. Setup it in any way you want.
+default_open_time = "09:00"
+default_close_time = "21:00"
+time_before_opening = 15
+time_after_closing = 15
+config_check_interval = 5
+
+[weekly_schedule.monday]
+open_time = "10:00"
+close_time = "18:00"
+
+[weekly_schedule.tuesday]
+# No specific time, uses default
+
+[weekly_schedule.wednesday]
+# No specific time, uses default
+
+[weekly_schedule.thursday]
+# No specific time, uses default
+
+[weekly_schedule.friday]
+# No specific time, uses default
+
+[weekly_schedule.saturday]
+open_time = "10:00"
+close_time = "22:00"
+
+[weekly_schedule.sunday]
+open_time = "11:00"
+close_time = "20:00"
