@@ -27,7 +27,7 @@ def load_config(file_path):
 
 # Funktsioon praeguse aja saamiseks
 def get_current_time():
-    return datetime.now().time()
+    return datetime.now().replace(microsecond=0).time()
 
 # Funktsioon, mis määrab tänase päeva ajad
 def get_today_schedule(config):
@@ -88,12 +88,13 @@ def main():
     start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
     end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
     
+    logging.info(f"Initial schedule loaded: start time: {start_time}, end time: {end_time}")
+    
     last_hash = get_file_hash(CONFIG_PATH)
     player = None
 
     while True:
-        now = datetime.now().time()  # Saab praeguse aja
-        logging.info(f"Current time: {now}, start time: {start_time}, end time: {end_time}")
+        now = get_current_time()  # Saab praeguse aja
         if is_time_between(start_time, end_time):
             if player is None:
                 logging.info("Within time window, starting playback.")
@@ -126,7 +127,7 @@ def main():
             start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
             end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
             last_hash = current_hash
-            logging.info("Reloaded updated config file.")
+            logging.info(f"Reloaded updated config file: start time: {start_time}, end time: {end_time}")
             # Kontrollime, kas peaksime muusikat mängima
             if is_time_between(start_time, end_time) and player is None:
                 logging.info("Config file changed and within time window, starting playback.")
@@ -144,9 +145,6 @@ def main():
             elif not is_time_between(start_time, end_time) and player is not None:
                 stop_audio(player)
                 player = None
-        else:
-            logging.info("Checked config file, no changes found.")
-        
         time.sleep(config_check_interval * 60)  # Kontrollib määratud intervalli järel uuesti
 
 if __name__ == "__main__":
