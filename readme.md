@@ -1,6 +1,6 @@
 # Radio Player Service
 
-This project is designed to play background music and announcements in a store using a Raspberry Pi with Raspbian. The script plays music files in a loop and can play announcements at specified times. The configuration is managed via a `config.toml` file.
+This project is designed to play background audio and announcements in a store using a Raspberry Pi with Raspbian. The script plays audio files in a loop and can play announcements at specified times. The configuration is managed via a `config.toml` file.
 
 ## Prerequisites
 
