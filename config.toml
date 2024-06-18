@@ -1,13 +1,19 @@
-#This is config file. Setup it in any way you want.
+# Default opening and closing times
 default_open_time = "09:00"
 default_close_time = "21:00"
+
+# Time in minutes before opening and after closing to play the music
 time_before_opening = 15
 time_after_closing = 15
-config_check_interval = 5
 
+# Interval in minutes to check the configuration file for changes
+config_check_interval = 120
+
+# Weekly schedule for opening and closing times
 [weekly_schedule.monday]
-open_time = "18:25"
-close_time = "18:30"
+# This is example time what differs from default times.
+# open_time = "11:00"
+# close_time = "18:30"
 
 [weekly_schedule.tuesday]
 # No specific time, uses default
@@ -22,13 +28,35 @@ close_time = "18:30"
 # No specific time, uses default
 
 [weekly_schedule.saturday]
-open_time = "10:00"
-close_time = "22:00"
+# No specific time, uses default
 
 [weekly_schedule.sunday]
-open_time = "11:00"
-close_time = "20:00"
+# No specific time, uses default
 
-[announcements]
-#"12:00" = "announcement1.mp3"
-#"18:00" = "announcement2.mp3"
+# Default announcements schedule
+[default_announcements]
+# This is example of default announcement.
+# "12:30" = "someaudiofile.mp3"
+# "13:30" = "someotheraudiofile.wav"
+
+# Weekly schedule for announcements
+[announcements.monday]
+# No specific announcements, uses default
+
+[announcements.tuesday]
+# No specific announcements, uses default
+
+[announcements.wednesday]
+# No specific announcements, uses default
+
+[announcements.thursday]
+# No specific announcements, uses default
+
+[announcements.friday]
+# No specific announcements, uses default
+
+[announcements.saturday]
+# No specific announcements, uses default
+
+[announcements.sunday]
+# No specific announcements, uses default
