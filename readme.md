@@ -10,14 +10,25 @@ Make sure your Raspberry Pi is up to date:
 sudo apt update
 sudo apt upgrade
 ```
-# Dependencies
-Install the necessary dependencies:
-
+## Dependencies
+This project requires the following dependencies to be installed:
+**Python packages:**
+   - `toml`
+   - `vlc`
+I have have not tested on env so i install these system wide.
+env testing is "to-do"
+```sh
+sudo apt install python3-toml python3-vlc
 ```
-sudo apt install python3 python3-toml vlc python3-vlc
+Add `python3` into mix if you are not sure if it is latest version for your dist.
+But it should be updated if you already did `sudo apt upgrade`
+
+Also make sure that ALSA utils is installed
+```sh
+sudo apt-get install vlc alsa-utils
 ```
 
-# Finding the Correct Audio Device
+## Finding the Correct Audio Device
 
 To find the correct audio device for your setup, use the following command:
 ```
@@ -47,11 +58,11 @@ card 2: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 H
 ```
 In this example, you might use hw:2,0 for the headphones.
 
-# Configuration
+## Configuration
 
 Make sure you have a config.toml file in the same directory as your script. An example configuration file (config.toml) is provided in the repository.
 
-# Setup the Service
+## Setup the Service
 
 Create a systemd service file to manage the script as a service.
 
@@ -87,7 +98,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable radio.service
 sudo systemctl start radio.service
 ```
-# Logs
+## Logs
 To view the logs for the service, use the following command:
 ```
 sudo journalctl -u radio.service
