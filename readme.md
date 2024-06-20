@@ -12,6 +12,7 @@ sudo apt upgrade
 ```
 ## Dependencies
 This project requires the following dependencies to be installed:
+
 Python packages:
    - `toml`
    - `vlc`
