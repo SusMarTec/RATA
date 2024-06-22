@@ -6,6 +6,7 @@ import vlc
 import os
 import logging
 import hashlib
+import sys
 
 # Define working directories and file paths / Määrake töökaustad ja failiteed
 WORKING_DIR = os.path.expanduser("~/Radio")
@@ -71,20 +72,30 @@ def play_audio(file, volume=100):
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
         return None
-    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:2,0')  # Set VLC to use specific ALSA device (bcm2835 Headphones)
+    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:0,0')  # Set VLC to use specific ALSA device
     player = instance.media_player_new()
     media = instance.media_new(file_path)
     player.set_media(media)
     player.audio_set_volume(volume)  # Set the volume here / Määrake siin helitugevus
     player.play()
     logging.info(f"Started playing {file_path} with volume {volume}.")
-    return player
+    
+    # Wait for the audio to finish
+    while player.get_state() != vlc.State.Ended:
+        time.sleep(1)
+    
+    # Release the player to free memory
+    player.release()
+    instance.release()
+    logging.info(f"Finished playing {file_path} and released the player.")
+    return None
 
 # Function to stop audio playback / Funktsioon heli taasesituse peatamiseks
 def stop_audio(player):
     if player:
         player.stop()
-        logging.info("Stopped playing audio file.")
+        player.release()
+        logging.info("Stopped playing audio file and released the player.")
 
 # Function to check if the configuration file content has changed / Funktsioon kontrollimaks, kas konfiguratsioonifaili sisu on muutunud
 def get_file_hash(file_path):
@@ -132,10 +143,7 @@ def main():
                 logging.info(f"Playing announcement: {announcement_file} at {now_str}")
                 if player:
                     player.audio_set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
-                announcement_player = play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
-                while announcement_player and announcement_player.get_state() != vlc.State.Ended:
-                    time.sleep(1)
-                stop_audio(announcement_player)
+                play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
                 if player:
                     player.audio_set_volume(100)  # Restore background music volume / Taastage taustamuusika helitugevus
                 last_announcement_time = now_str
@@ -182,6 +190,11 @@ def main():
             elif not is_time_between(start_time, end_time) and player is not None:
                 stop_audio(player)
                 player = None
+
+        # Restart the script one hour after closing time / Taaskäivitage skript üks tund pärast sulgemisaega
+        if datetime.now().time() > (datetime.combine(datetime.today(), close_time) + timedelta(hours=1)).time():
+            logging.info("Restarting the script one hour after closing time.")
+            sys.exit(0)
 
         time.sleep(config_check_interval * 60)  # Check again after the specified interval / Kontrollige uuesti pärast määratud intervalli
 
