@@ -71,12 +71,12 @@ def is_time_between(begin_time, end_time, check_time=None):
         return check_time >= begin_time or check_time <= end_time
 
 # Function to play a single audio file / Funktsioon ühe heli faili mängimiseks
-def play_audio(file, volume=100):
+def play_audio(file, audio_device, volume=100):
     file_path = os.path.join(WORKING_DIR, file)
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
         return None, None
-    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:1,0')  # Set VLC to use specific ALSA device
+    instance = vlc.Instance(f'--aout=alsa', f'--alsa-audio-device=hw:{audio_device}')  # Set VLC to use specific ALSA device
     player = instance.media_player_new()
     media = instance.media_new(file_path)
     player.set_media(media)
@@ -116,6 +116,7 @@ def main():
     time_after_closing = config['time_after_closing']
     config_check_interval = config['config_check_interval']
     announcements = get_today_announcements(config)
+    audio_device = config['audio_device']  # Load audio device from config
 
     # Calculate start and end times based on configuration / Arvutage konfiguratsiooni põhjal algus- ja lõpuaeg
     start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
@@ -149,7 +150,7 @@ def main():
                 logging.info(f"Playing announcement: {announcement_file} at {now_str}")
                 if player:
                     player.audio_set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
-                announcement_player, announcement_instance = play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
+                announcement_player, announcement_instance = play_audio(announcement_file, audio_device, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
                 while announcement_player.get_state() != vlc.State.Ended:
                     time.sleep(1)
                 stop_audio(announcement_player, announcement_instance)
@@ -161,12 +162,12 @@ def main():
         if is_time_between(start_time, end_time):
             if player is None:
                 logging.info("Within time window, starting playback.")
-                player, instance = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
             elif player.get_state() == vlc.State.Ended:
                 logging.info(f"Finished playing {AUDIO_FILES[file_index]}.")
                 stop_audio(player, instance)
                 file_index = (file_index + 1) % len(AUDIO_FILES)
-                player, instance = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
         else:
             if player is not None:
                 stop_audio(player, instance)
@@ -189,6 +190,7 @@ def main():
                 time_after_closing = config['time_after_closing']
                 config_check_interval = config['config_check_interval']
                 announcements = get_today_announcements(config)
+                audio_device = config['audio_device']  # Load updated audio device
                 start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
                 end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
                 last_hash = current_hash
@@ -199,7 +201,7 @@ def main():
                 if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
                     logging.info("Config file changed and within time window, starting playback.")
                     file_index = 0
-                    player, instance = play_audio(AUDIO_FILES[file_index])
+                    player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
                 elif not is_time_between(start_time, end_time) and player is not None:
                     stop_audio(player, instance)
                     player = None

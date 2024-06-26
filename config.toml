@@ -9,6 +9,9 @@ time_after_closing = 15
 # Interval in minutes to check the configuration file for changes
 config_check_interval = 120
 
+# Audio device configuration
+audio_device = "0,0"
+
 # Weekly schedule for opening and closing times
 [weekly_schedule.monday]
 # This is example time what differs from default times.
