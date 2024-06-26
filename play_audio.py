@@ -84,21 +84,14 @@ def play_audio(file, volume=100):
     player.play()
     logging.info(f"Started playing {file_path} with volume {volume}.")
     
-    # Wait for the audio to finish
-    while player.get_state() != vlc.State.Ended:
-        time.sleep(1)
-    
-    # Release the player to free memory
-    player.release()
-    instance.release()
-    logging.info(f"Finished playing {file_path} and released the player.")
-    return None
+    return player, instance
 
 # Function to stop audio playback / Funktsioon heli taasesituse peatamiseks
-def stop_audio(player):
+def stop_audio(player, instance):
     if player:
         player.stop()
         player.release()
+        instance.release()
         logging.info("Stopped playing audio file and released the player.")
 
 # Function to check if the configuration file content has changed / Funktsioon kontrollimaks, kas konfiguratsioonifaili sisu on muutunud
@@ -133,6 +126,7 @@ def main():
 
     last_hash = get_file_hash(CONFIG_PATH)
     player = None
+    instance = None
     last_announcement_time = None
 
     file_index = 0
@@ -155,7 +149,10 @@ def main():
                 logging.info(f"Playing announcement: {announcement_file} at {now_str}")
                 if player:
                     player.audio_set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
-                play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
+                announcement_player, announcement_instance = play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
+                while announcement_player.get_state() != vlc.State.Ended:
+                    time.sleep(1)
+                stop_audio(announcement_player, announcement_instance)
                 if player:
                     player.audio_set_volume(100)  # Restore background music volume / Taastage taustamuusika helitugevus
                 last_announcement_time = now_str
@@ -164,14 +161,17 @@ def main():
         if is_time_between(start_time, end_time):
             if player is None:
                 logging.info("Within time window, starting playback.")
-                player = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index])
             elif player.get_state() == vlc.State.Ended:
+                logging.info(f"Finished playing {AUDIO_FILES[file_index]}.")
+                stop_audio(player, instance)
                 file_index = (file_index + 1) % len(AUDIO_FILES)
-                player = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index])
         else:
             if player is not None:
-                stop_audio(player)
+                stop_audio(player, instance)
                 player = None
+                instance = None
 
         # Check if the configuration file content has changed / Kontrollige, kas konfiguratsioonifaili sisu on muutunud
         current_hash = get_file_hash(CONFIG_PATH)
@@ -198,10 +198,11 @@ def main():
             if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
                 logging.info("Config file changed and within time window, starting playback.")
                 file_index = 0
-                player = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index])
             elif not is_time_between(start_time, end_time) and player is not None:
-                stop_audio(player)
+                stop_audio(player, instance)
                 player = None
+                instance = None
 
         time.sleep(config_check_interval * 60)  # Check again after the specified interval / Kontrollige uuesti pärast määratud intervalli
 
