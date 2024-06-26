@@ -6,7 +6,6 @@ import vlc
 import os
 import logging
 import hashlib
-import sys
 
 # Define working directories and file paths / Määrake töökaustad ja failiteed
 WORKING_DIR = os.path.expanduser("~/Radio")
@@ -19,7 +18,12 @@ AUDIO_FILES = ["sc1.mp3", "sc2.mp3", "sc3.mp3"]
 RESTART_INTERVAL = 24 * 60 * 60  # 24 hours in seconds / 24 tundi sekundites
 
 # Configure logging / Seadistage logimine
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
+def setup_logging():
+    global LOG_FILE
+    LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log")
+    logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
+
+setup_logging()
 
 # Function to load configuration file / Funktsioon konfiguratsioonifaili laadimiseks
 def load_config(file_path):
@@ -72,7 +76,7 @@ def play_audio(file, volume=100):
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
         return None
-    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:0,0')  # Set VLC to use specific ALSA device
+    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:1,0')  # Set VLC to use specific ALSA device
     player = instance.media_player_new()
     media = instance.media_new(file_path)
     player.set_media(media)
@@ -132,10 +136,18 @@ def main():
     last_announcement_time = None
 
     file_index = 0
+    current_day = datetime.now().day
+
     while True:
         now = get_current_time()  # Get the current time / Saage praegune aeg
         now_str = now.strftime("%H:%M")
+        new_day = datetime.now().day
         
+        # Create a new log file if the day has changed
+        if new_day != current_day:
+            setup_logging()
+            current_day = new_day
+
         # Check for announcements / Kontrollige teadaandeid
         if now_str in announcements:
             announcement_file = announcements[now_str]
@@ -191,15 +203,9 @@ def main():
                 stop_audio(player)
                 player = None
 
-        # Restart the script one hour after closing time / Taaskäivitage skript üks tund pärast sulgemisaega
-        if datetime.now().time() > (datetime.combine(datetime.today(), close_time) + timedelta(hours=1)).time():
-            logging.info("Restarting the script one hour after closing time.")
-            sys.exit(0)
-
         time.sleep(config_check_interval * 60)  # Check again after the specified interval / Kontrollige uuesti pärast määratud intervalli
 
 if __name__ == "__main__":
-    start_time = time.time()  # Record the script start time / Salvestage skripti käivitamise aeg
     logging.info("Starting the script.")
     while True:
         try:
@@ -207,6 +213,3 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Error: {e}")  # Log any errors / Logige kõik vead
             time.sleep(60)  # Wait before restarting in case of error / Oodake enne uuesti käivitamist vea korral
-        if time.time() - start_time > RESTART_INTERVAL:
-            logging.info("Restarting the script.")
-            break  # Restart the script after the specified interval / Taaskäivitage skript pärast määratud intervalli
