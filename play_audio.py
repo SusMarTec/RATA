@@ -75,7 +75,7 @@ def play_audio(file, volume=100):
     file_path = os.path.join(WORKING_DIR, file)
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
-        return None
+        return None, None
     instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:1,0')  # Set VLC to use specific ALSA device
     player = instance.media_player_new()
     media = instance.media_new(file_path)
@@ -173,38 +173,39 @@ def main():
                 player = None
                 instance = None
 
-        # Check if the configuration file content has changed / Kontrollige, kas konfiguratsioonifaili sisu on muutunud
-        current_hash = get_file_hash(CONFIG_PATH)
-        if current_hash != last_hash:
-            config = load_config(CONFIG_PATH)  # Load the updated configuration file / Laadige uuendatud konfiguratsioonifail
-            if config is None:
-                logging.error("Failed to load updated configuration. Exiting.")
-                return
+        # Check if the configuration file content has changed at specified intervals / Kontrollige, kas konfiguratsioonifaili sisu on muutunud määratud intervallidega
+        if (datetime.now() - timedelta(minutes=config_check_interval)).minute % config_check_interval == 0:
+            current_hash = get_file_hash(CONFIG_PATH)
+            if current_hash != last_hash:
+                config = load_config(CONFIG_PATH)  # Load the updated configuration file / Laadige uuendatud konfiguratsioonifail
+                if config is None:
+                    logging.error("Failed to load updated configuration. Exiting.")
+                    return
 
-            open_time_str, close_time_str = get_today_schedule(config)  # Get today's schedule / Saage tänane ajakava
-            open_time = datetime.strptime(open_time_str, "%H:%M").time()
-            close_time = datetime.strptime(close_time_str, "%H:%M").time()
-            time_before_opening = config['time_before_opening']
-            time_after_closing = config['time_after_closing']
-            config_check_interval = config['config_check_interval']
-            announcements = get_today_announcements(config)
-            start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
-            end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
-            last_hash = current_hash
-            logging.info(f"Reloaded updated config file: start time: {start_time}, end time: {end_time}")
-            logging.info(f"Today's announcements: {announcements}")
-            
-            # Check if we should be playing music / Kontrollige, kas peaksime muusikat mängima
-            if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
-                logging.info("Config file changed and within time window, starting playback.")
-                file_index = 0
-                player, instance = play_audio(AUDIO_FILES[file_index])
-            elif not is_time_between(start_time, end_time) and player is not None:
-                stop_audio(player, instance)
-                player = None
-                instance = None
+                open_time_str, close_time_str = get_today_schedule(config)  # Get today's schedule / Saage tänane ajakava
+                open_time = datetime.strptime(open_time_str, "%H:%M").time()
+                close_time = datetime.strptime(close_time_str, "%H:%M").time()
+                time_before_opening = config['time_before_opening']
+                time_after_closing = config['time_after_closing']
+                config_check_interval = config['config_check_interval']
+                announcements = get_today_announcements(config)
+                start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
+                end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
+                last_hash = current_hash
+                logging.info(f"Reloaded updated config file: start time: {start_time}, end time: {end_time}")
+                logging.info(f"Today's announcements: {announcements}")
+                
+                # Check if we should be playing music / Kontrollige, kas peaksime muusikat mängima
+                if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
+                    logging.info("Config file changed and within time window, starting playback.")
+                    file_index = 0
+                    player, instance = play_audio(AUDIO_FILES[file_index])
+                elif not is_time_between(start_time, end_time) and player is not None:
+                    stop_audio(player, instance)
+                    player = None
+                    instance = None
 
-        time.sleep(config_check_interval * 60)  # Check again after the specified interval / Kontrollige uuesti pärast määratud intervalli
+        time.sleep(1)  # Check frequently for state changes / Kontrollige sageli olekumuutusi
 
 if __name__ == "__main__":
     logging.info("Starting the script.")
