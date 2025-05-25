@@ -31,15 +31,16 @@ Also make sure that ALSA utils is installed
 sudo apt-get install vlc alsa-utils
 ```
 
-## Finding the Correct Audio Device
+## Finding the Correct Audio Device and Configuring It
 
-To find the correct audio device for your setup, use the following command:
+To find the correct audio device for your setup, use the following command in your Raspberry Pi terminal:
 ```
 aplay -l
 ```
 
-This will list all the audio playback devices available. Look for the device that corresponds to your headphones or desired audio output. For example, you might see something like this:
+This command will list all the audio playback hardware devices available. Look for the device that corresponds to your desired audio output (e.g., headphones, speakers). The output will show entries like `card X: ..., device Y: ...`. You need to note these `X` (card number) and `Y` (device number).
 
+For example, you might see output similar to this:
 ```
 **** List of PLAYBACK Hardware Devices ****
 card 0: vc4hdmi0 [vc4-hdmi-0], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]
@@ -51,15 +52,20 @@ card 1: vc4hdmi1 [vc4-hdmi-1], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]
 card 2: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]
   Subdevices: 8/8
   Subdevice #0: subdevice #0
-  Subdevice #1: subdevice #1
-  Subdevice #2: subdevice #2
-  Subdevice #3: subdevice #3
-  Subdevice #4: subdevice #4
-  Subdevice #5: subdevice #5
-  Subdevice #6: subdevice #6
-  Subdevice #7: subdevice #7
+  ...
 ```
-In this example, you might use hw:2,0 for the headphones.
+If you want to use the 'Headphones' device from this example, it is `card 2`, `device 0`.
+
+**Setting the device in `config.toml`:**
+
+Once you have identified the card and device numbers, you need to set them in the `config.toml` file. Open the `config.toml` file and find the `audio_device` key. Set its value to the card and device numbers as a string, in the format `"X,Y"`.
+
+For the example above (`card 2`, `device 0`), you would set it in `config.toml` as:
+```toml
+audio_device = "2,0"
+```
+
+**Important:** The `play_audio.py` script will automatically add the `hw:` prefix to this value (e.g., it will use `hw:2,0` internally). Therefore, you should **only** include the numbers and the comma (e.g., `"2,0"`) in the `config.toml` file, not the `hw:` prefix. The default `audio_device = "0,0"` in the example `config.toml` also follows this format.
 
 ## Configuration
 
