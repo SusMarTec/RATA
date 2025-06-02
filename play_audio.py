@@ -13,16 +13,58 @@ CONFIG_PATH = os.path.join(WORKING_DIR, "config.toml")
 LOG_DIR = os.path.join(WORKING_DIR, "logs")
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
-LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log")
+# LOG_FILE global variable: Its role changes. It will be updated by setup_logging.
+# Initialize it here for clarity, though setup_logging will define its operational value.
+LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log") 
 AUDIO_FILES = ["sc1.mp3", "sc2.mp3", "sc3.mp3"]
 RESTART_INTERVAL = 24 * 60 * 60  # 24 hours in seconds / 24 tundi sekundites
 
 # Configure logging / Seadistage logimine
-def setup_logging():
-    global LOG_FILE
-    LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log")
-    logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
+# Get the root logger once at the module level / Hangi juurlogija üks kord mooduli tasemel
+logger = logging.getLogger()
+# Set the root logger level. This is important for messages to be passed to handlers. / Määra juurlogija tase. See on oluline, et sõnumid jõuaksid halduriteni.
+logger.setLevel(logging.INFO) 
+# Define a common log formatter / Määra ühine logivormindaja
+log_formatter = logging.Formatter('%(asctime)s %(levelname)s:%(message)s')
 
+def setup_logging():
+    """
+    Configures file logging. Removes old file handlers and adds a new one
+    for the current day's log file. Ensures logs are written to a new file
+    when the date changes.
+
+    Seadistab failipõhise logimise. Eemaldab vanad failihaldurid ja lisab uue
+    praeguse päeva logifaili jaoks. Tagab, et logid kirjutatakse uude faili,
+    kui kuupäev muutub.
+    """
+    global LOG_FILE # To update the global LOG_FILE variable's value / Globaalse LOG_FILE muutuja väärtuse uuendamiseks
+
+    current_log_filename = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log")
+
+    # Remove any existing FileHandlers from the root logger / Eemalda kõik olemasolevad FileHandlerid juurlogijast
+    # Iterate over a copy of logger.handlers list to allow modification / Itereeri logger.handlers nimekirja koopia üle, et võimaldada muutmist
+    for handler in logger.handlers[:]: 
+        if isinstance(handler, logging.FileHandler):
+            # Using print for this critical step, as logging might be in transition. / Kasuta printi selle kriitilise sammu jaoks, kuna logimine võib olla ülemineku faasis.
+            print(f"Attempting to close and remove old log handler for: {handler.baseFilename}")
+            handler.close()
+            logger.removeHandler(handler)
+            print(f"Successfully closed and removed old log handler for: {handler.baseFilename}")
+
+    # Add the new FileHandler for the current day / Lisa uus FileHandler praeguse päeva jaoks
+    file_handler = logging.FileHandler(current_log_filename)
+    file_handler.setFormatter(log_formatter)
+    logger.addHandler(file_handler)
+    
+    # Update the global LOG_FILE variable to the new path / Uuenda globaalne LOG_FILE muutuja uue failiteega
+    LOG_FILE = current_log_filename
+    
+    # Log confirmation to the new log file. This message is crucial for confirming the switch. / Logi kinnitus uude logifaili. See sõnum on lülituse kinnitamiseks ülioluline.
+    logging.info(f"Logging setup/reconfigured. Now logging to: {LOG_FILE}")
+
+
+# Initial call to set up logging when the script starts. / Esmane logimise seadistamise kutse skripti käivitamisel.
+# This replaces the old setup_logging() call at the module level.
 setup_logging()
 
 # Function to load configuration file / Funktsioon konfiguratsioonifaili laadimiseks
@@ -141,6 +183,7 @@ def main():
         if new_day != current_day:
             setup_logging()
             current_day = new_day
+            logging.info(f"Day changed. Log file updated to: {LOG_FILE}")
 
         # Check for announcements / Kontrollige teadaandeid
         if now_str in announcements:
