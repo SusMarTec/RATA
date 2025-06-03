@@ -1,3 +1,9 @@
+# Specify the audio output device (e.g., hw:1,0 for ALSA).
+# If left empty or this key is commented out/removed, the script will attempt
+# to auto-detect the Raspberry Pi headphone jack.
+# If auto-detection fails, an error will be logged, and no audio will play
+# until a device is explicitly configured.
+audio_output_device = "hw:1,0"
 # Default opening and closing times
 default_open_time = "09:00"
 default_close_time = "21:00"
