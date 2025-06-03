@@ -107,3 +107,19 @@ To view the logs for the service, use the following command:
 sudo journalctl -u radio.service
 ```
 You can also see logs under logs folder where script working logs are.
+
+### Troubleshooting / Advanced Configuration
+
+If you experience issues with the script's stability or long-term operation, you might consider setting up scheduled tasks via crontab. These are examples and may need adjustment based on your specific setup (e.g., service name if you run this as a service).
+
+To edit your crontab, run `crontab -e`.
+
+```cron
+# Daily reboot at 5:00 AM (helps clear system state)
+0 5 * * * sudo shutdown -r now
+
+# Daily restart of the radio service at 7:00 AM (ensure the script is freshly started)
+# Replace 'radio.service' with your actual service name if different.
+0 7 * * * sudo systemctl restart radio.service
+```
+**Note:** Regularly rebooting or restarting services can help maintain stability but might also indicate underlying issues that could be investigated further.
