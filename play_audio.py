@@ -8,6 +8,7 @@ import logging
 import hashlib
 import subprocess
 import re
+from typing import Union
 
 # Define working directories and file paths / Määrake töökaustad ja failiteed
 WORKING_DIR = os.path.expanduser("~/Radio")
@@ -114,7 +115,7 @@ def is_time_between(begin_time, end_time, check_time=None):
     else:  # When the time period spans midnight / Kui ajavahemik ületab südaöö
         return check_time >= begin_time or check_time <= end_time
 
-def detect_raspberry_pi_audio_device() -> str | None:
+def detect_raspberry_pi_audio_device() -> Union[str, None]:
     logging.info("Attempting to auto-detect Raspberry Pi audio device...")
     try:
         # Try parsing 'aplay -l' output
