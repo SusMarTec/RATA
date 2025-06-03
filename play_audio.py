@@ -6,6 +6,9 @@ import vlc
 import os
 import logging
 import hashlib
+import subprocess
+import re
+from typing import Optional
 
 # Define working directories and file paths / Määrake töökaustad ja failiteed
 WORKING_DIR = os.path.expanduser("~/Radio")
@@ -112,13 +115,85 @@ def is_time_between(begin_time, end_time, check_time=None):
     else:  # When the time period spans midnight / Kui ajavahemik ületab südaöö
         return check_time >= begin_time or check_time <= end_time
 
+def detect_raspberry_pi_audio_device() -> Optional[str]:
+    logging.info("Attempting to auto-detect Raspberry Pi audio device...")
+    try:
+        # Try parsing 'aplay -l' output
+        result = subprocess.run(['aplay', '-l'], capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            lines = result.stdout.splitlines()
+            # Regex to find card number, device number, and description
+            # Example line: card 0: Headphones [bcm2835 Headphones], device 0: Headphones [Headphones]
+            # Or: card 0: bcm2835_alsa [bcm2835 ALSA], device 0: bcm2835 ALSA [bcm2835 ALSA]
+            # We are looking for hw:card,device
+            device_pattern = re.compile(r"card (\d+): .*\[(.*)\].*device (\d+):")
+
+            found_devices = []
+            for line in lines:
+                match = device_pattern.search(line)
+                if match:
+                    card_num = match.group(1)
+                    description = match.group(2).lower() # Full description in brackets
+                    device_num = match.group(3) # Device number for that card. Often 0 for primary.
+
+                    # Check for keywords indicating analog/headphone output
+                    # Prioritize "Headphones". Also consider "Analogue", "Analog", "bcm2835 ALSA" (common for Pi).
+                    # Avoid HDMI if other options are present.
+                    is_headphone = "headphones" in description
+                    is_analog = "analog" in description or "analogue" in description
+                    is_bcm2835 = "bcm2835" in description # Often the Pi's general audio
+                    is_hdmi = "hdmi" in description
+
+                    if is_headphone or is_analog or (is_bcm2835 and not is_hdmi):
+                        device_str = f"hw:{card_num},{device_num}"
+                        logging.info(f"Found potential device: {device_str} with description: {description}")
+                        # Prioritize "Headphones"
+                        if is_headphone:
+                            found_devices.insert(0, device_str) # Add to front
+                        else:
+                            found_devices.append(device_str)
+
+            if found_devices:
+                selected_device = found_devices[0] # Take the best match
+                logging.info(f"Auto-detected audio device from 'aplay -l': {selected_device}")
+                return selected_device
+
+        else:
+            logging.warning(f"'aplay -l' command failed or returned non-zero exit code: {result.returncode}. Stderr: {result.stderr}")
+
+    except FileNotFoundError:
+        logging.warning("'aplay' command not found. Cannot auto-detect using 'aplay -l'.")
+    except Exception as e:
+        logging.error(f"Error during 'aplay -l' parsing: {e}")
+
+    # Fallback to common ALSA names if 'aplay -l' fails or yields no suitable device
+    logging.info("Falling back to trying common ALSA device names for Raspberry Pi.")
+    common_devices = ["hw:0,0", "hw:1,0"] # Common for headphone jack on different Pi models
+    # Note: Without 'aplay -l', we can't be sure these exist or are headphones.
+    # For this implementation, we'll just return the first one as a guess.
+    # A more robust check would involve trying to query these devices.
+    # However, for now, we'll just pick the first as a last resort fallback.
+    # A user should ideally configure explicitly if aplay -l fails.
+    logging.warning(f"Attempting to use common device: {common_devices[0]} as a fallback. This is a guess.")
+    return common_devices[0] # Return the first common device as a last attempt
+
+    # If all detection methods fail:
+    # logging.warning("Auto-detection failed to find any suitable audio device.")
+    # return None # Original plan was to return None if all fails.
+                  # The user feedback suggested continuing, implying we might not play audio.
+                  # The fallback to common_devices[0] is a compromise.
+                  # If this is also not desired, change to `return None`.
+
 # Function to play a single audio file / Funktsioon ühe heli faili mängimiseks
-def play_audio(file, volume=100):
+def play_audio(file, audio_device_name, volume=100):
+    if not audio_device_name: # Handles None or empty string
+        logging.error("Audio device not determined (neither configured nor auto-detected). Cannot initialize player or play audio.")
+        return None, None # Return None for both player and instance
     file_path = os.path.join(WORKING_DIR, file)
     if not os.path.exists(file_path):
         logging.error(f"File not found: {file_path}")
         return None, None
-    instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=hw:1,0')  # Set VLC to use specific ALSA device
+    instance = vlc.Instance('--aout=alsa', f'--alsa-audio-device={audio_device_name}')  # Set VLC to use specific ALSA device
     player = instance.media_player_new()
     media = instance.media_new(file_path)
     player.set_media(media)
@@ -150,6 +225,26 @@ def main():
     if config is None:
         logging.error("Failed to load configuration. Exiting.")
         return
+
+    audio_device_from_config = config.get('audio_output_device')
+    audio_device = None # Initialize audio_device to None
+
+    if audio_device_from_config and audio_device_from_config.strip(): # Check if configured and not empty
+        audio_device = audio_device_from_config.strip()
+        logging.info(f"Using audio output device from config file: {audio_device}")
+    else:
+        if 'audio_output_device' in config: # Key exists but is empty or whitespace
+             logging.info("Audio output device is empty in config. Attempting auto-detection.")
+        else: # Key does not exist
+             logging.info("Audio output device not configured in config. Attempting auto-detection.")
+
+        detected_device = detect_raspberry_pi_audio_device()
+        if detected_device:
+            audio_device = detected_device
+            logging.info(f"Successfully auto-detected audio device: {audio_device}")
+        else:
+            logging.error("Auto-detection of audio device failed. No audio will be played. Please configure 'audio_output_device' in config.toml if you want audio output.")
+            # audio_device remains None
 
     open_time_str, close_time_str = get_today_schedule(config)  # Get today's schedule / Saage tänane ajakava
     open_time = datetime.strptime(open_time_str, "%H:%M").time()  # Get opening time / Saage avamisaeg
@@ -192,7 +287,7 @@ def main():
                 logging.info(f"Playing announcement: {announcement_file} at {now_str}")
                 if player:
                     player.audio_set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
-                announcement_player, announcement_instance = play_audio(announcement_file, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
+                announcement_player, announcement_instance = play_audio(announcement_file, audio_device, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
                 while announcement_player.get_state() != vlc.State.Ended:
                     time.sleep(1)
                 stop_audio(announcement_player, announcement_instance)
@@ -204,12 +299,12 @@ def main():
         if is_time_between(start_time, end_time):
             if player is None:
                 logging.info("Within time window, starting playback.")
-                player, instance = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
             elif player.get_state() == vlc.State.Ended:
                 logging.info(f"Finished playing {AUDIO_FILES[file_index]}.")
                 stop_audio(player, instance)
                 file_index = (file_index + 1) % len(AUDIO_FILES)
-                player, instance = play_audio(AUDIO_FILES[file_index])
+                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
         else:
             if player is not None:
                 stop_audio(player, instance)
@@ -242,7 +337,7 @@ def main():
                 if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
                     logging.info("Config file changed and within time window, starting playback.")
                     file_index = 0
-                    player, instance = play_audio(AUDIO_FILES[file_index])
+                    player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
                 elif not is_time_between(start_time, end_time) and player is not None:
                     stop_audio(player, instance)
                     player = None
