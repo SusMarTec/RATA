@@ -1,5 +1,5 @@
 # RATA (Retail Audio Timing Application) 
-#RATA: The "It Works" Store Audio Solution – Approved by IT
+# RATA: The "It Works" Store Audio Solution, Approved by IT
 Look, if you need simple background music and announcements in your shop, and you've got a Raspberry Pi lying around, RATA is basically that script that just... does it. No fancy frills, no complex setups. You tell it what music to play, when to make an announcement, and it just runs in the background.
 
 It's built with the idea that if something works reliably, you stick with it. You set it up, forget about it, and your customers get their tunes and timely messages. It's especially handy for smaller places that don't need expensive, over-engineered sound systems.
