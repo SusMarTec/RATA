@@ -18,8 +18,7 @@ if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 # LOG_FILE global variable: Its role changes. It will be updated by setup_logging.
 # Initialize it here for clarity, though setup_logging will define its operational value.
-LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log") 
-AUDIO_FILES = ["sc1.mp3", "sc2.mp3", "sc3.mp3"]
+LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%m%d%Y") + ".log")
 RESTART_INTERVAL = 24 * 60 * 60  # 24 hours in seconds / 24 tundi sekundites
 
 # Configure logging / Seadistage logimine
@@ -219,6 +218,21 @@ def get_file_hash(file_path):
         hasher.update(buf)
     return hasher.hexdigest()
 
+# Function to load audio files from a folder / Funktsioon helifailide laadimiseks kaustast
+def load_audio_files(music_folder_path):
+    audio_files = []
+    if not os.path.isdir(music_folder_path):
+        logging.warning(f"Music folder not found: {music_folder_path}")
+        return audio_files
+    for file in os.listdir(music_folder_path):
+        if file.lower().endswith(('.mp3', '.wav')):
+            audio_files.append(os.path.join(music_folder_path, file))
+    if not audio_files:
+        logging.warning(f"No audio files found in music folder: {music_folder_path}")
+    else:
+        logging.info(f"Loaded audio files: {audio_files}")
+    return audio_files
+
 # Main function / Põhifunktsioon
 def main():
     config = load_config(CONFIG_PATH)  # Load the configuration file / Laadige konfiguratsioonifail
@@ -265,9 +279,21 @@ def main():
     player = None
     instance = None
     last_announcement_time = None
-
+    audio_files = [] # Initialize empty list for audio files
     file_index = 0
     current_day = datetime.now().day
+
+    # Determine music folder path
+    music_folder_path_config = config.get('background_music_folder')
+    default_music_folder = os.path.join(WORKING_DIR, "bgmusic")
+
+    if music_folder_path_config and os.path.isdir(music_folder_path_config):
+        audio_files = load_audio_files(music_folder_path_config)
+    elif os.path.isdir(default_music_folder):
+        logging.info(f"No valid 'background_music_folder' in config, using default: {default_music_folder}")
+        audio_files = load_audio_files(default_music_folder)
+    else:
+        logging.warning("No background music folder specified in config and default 'bgmusic' folder not found. No background music will be played.")
 
     while True:
         now = get_current_time()  # Get the current time / Saage praegune aeg
@@ -296,17 +322,23 @@ def main():
                 last_announcement_time = now_str
 
         # Play background music / Mängige taustamuusikat
-        if is_time_between(start_time, end_time):
-            if player is None:
-                logging.info("Within time window, starting playback.")
-                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
-            elif player.get_state() == vlc.State.Ended:
-                logging.info(f"Finished playing {AUDIO_FILES[file_index]}.")
-                stop_audio(player, instance)
-                file_index = (file_index + 1) % len(AUDIO_FILES)
-                player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
-        else:
-            if player is not None:
+        if audio_files: # Only attempt to play if there are audio files loaded
+            if is_time_between(start_time, end_time):
+                if player is None:
+                    logging.info("Within time window, starting playback.")
+                    player, instance = play_audio(audio_files[file_index], audio_device)
+                elif player.get_state() == vlc.State.Ended:
+                    logging.info(f"Finished playing {audio_files[file_index]}.")
+                    stop_audio(player, instance)
+                    file_index = (file_index + 1) % len(audio_files)
+                    player, instance = play_audio(audio_files[file_index], audio_device)
+            else:
+                if player is not None:
+                    stop_audio(player, instance)
+                    player = None
+                    instance = None
+        else: # No audio files loaded
+            if player is not None: # Stop player if it was somehow playing
                 stop_audio(player, instance)
                 player = None
                 instance = None
@@ -333,14 +365,33 @@ def main():
                 logging.info(f"Reloaded updated config file: start time: {start_time}, end time: {end_time}")
                 logging.info(f"Today's announcements: {announcements}")
                 
+                # Reload audio files based on new config
+                music_folder_path_config = config.get('background_music_folder')
+                if music_folder_path_config and os.path.isdir(music_folder_path_config):
+                    audio_files = load_audio_files(music_folder_path_config)
+                elif os.path.isdir(default_music_folder):
+                    logging.info(f"No valid 'background_music_folder' in config, using default: {default_music_folder}")
+                    audio_files = load_audio_files(default_music_folder)
+                else:
+                    logging.warning("No background music folder specified in config and default 'bgmusic' folder not found after config reload. No background music will be played.")
+                    audio_files = [] # Ensure audio_files is empty
+
                 # Check if we should be playing music / Kontrollige, kas peaksime muusikat mängima
-                if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
-                    logging.info("Config file changed and within time window, starting playback.")
-                    file_index = 0
-                    player, instance = play_audio(AUDIO_FILES[file_index], audio_device)
-                elif not is_time_between(start_time, end_time) and player is not None:
-                    stop_audio(player, instance)
-                    player = None
+                if audio_files:
+                    if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
+                        logging.info("Config file changed and within time window, starting playback.")
+                        file_index = 0 # Reset file index
+                        if player is not None: # Stop existing player before starting new one
+                            stop_audio(player, instance)
+                        player, instance = play_audio(audio_files[file_index], audio_device)
+                    elif not is_time_between(start_time, end_time) and player is not None:
+                        stop_audio(player, instance)
+                        player = None
+                        instance = None
+                else: # No audio files after config reload
+                    if player is not None:
+                        stop_audio(player, instance)
+                        player = None
                     instance = None
 
         time.sleep(1)  # Check frequently for state changes / Kontrollige sageli olekumuutusi

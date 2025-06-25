@@ -15,6 +15,11 @@ time_after_closing = 15
 # Interval in minutes to check the configuration file for changes
 config_check_interval = 120
 
+# Specify the folder for background music.
+# If commented out or left empty, the script will look for a 'bgmusic' folder
+# in the working directory (e.g., ~/Radio/bgmusic).
+# background_music_folder = "/path/to/your/music"
+
 # Weekly schedule for opening and closing times
 [weekly_schedule.monday]
 # This is example time what differs from default times.
