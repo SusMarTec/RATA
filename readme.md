@@ -80,7 +80,29 @@ In this example, you might use hw:2,0 for the headphones.
 
 ## Configuration
 
-Make sure you have a config.toml file in the same directory as your script. An example configuration file (config.toml) is provided in the repository.
+Make sure you have a `config.toml` file in the `~/Radio/` directory (or your chosen `WORKING_DIR`). An example configuration file (`config.toml`) is provided in the repository.
+
+### Background Music
+
+There are two ways to configure the background music:
+
+1.  **Default Folder:**
+    *   Create a folder named `bgmusic` inside your working directory (e.g., `~/Radio/bgmusic/`).
+    *   Place your audio files (e.g., `.mp3`, `.wav`) into this `bgmusic` folder.
+    *   If the `background_music_folder` option in `config.toml` is commented out or empty, the script will automatically use this `bgmusic` folder.
+
+2.  **Custom Folder via `config.toml`:**
+    *   Open your `config.toml` file.
+    *   Find or add the `background_music_folder` key.
+    *   Set its value to the absolute path of your desired music folder. For example:
+        ```toml
+        background_music_folder = "/home/pi/my_music_collection"
+        ```
+    *   Ensure this folder exists and contains your audio files.
+
+If neither a custom folder is specified and valid, nor the default `bgmusic` folder exists or contains music, no background music will be played.
+
+The script will play all supported audio files from the chosen folder in a loop.
 
 ## Setup the Service
 
