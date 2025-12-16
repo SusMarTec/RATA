@@ -15,6 +15,9 @@ time_after_closing = 15
 # Interval in minutes to check the configuration file for changes
 config_check_interval = 120
 
+# Enable or disable memory usage logging (useful for troubleshooting)
+enable_memory_logging = false
+
 # Specify the folder for background music.
 # If commented out or left empty, the script will look for a 'bgmusic' folder
 # in the working directory (e.g., ~/Radio/bgmusic).

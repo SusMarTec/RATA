@@ -70,7 +70,9 @@ def setup_logging():
 # This replaces the old setup_logging() call at the module level.
 setup_logging()
 
-def log_memory_usage():
+def log_memory_usage(enabled=False):
+    if not enabled:
+        return
     try:
         usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         # Linux returns ru_maxrss in kilobytes.
@@ -345,7 +347,12 @@ def main():
     logging.info(f"Initial schedule loaded: start time: {start_time}, end time: {end_time}")
     logging.info(f"Today's announcements: {announcements}")
 
+    # 1. Start fresh logging
+    enable_memory_logging = config.get('enable_memory_logging', False)
+    log_memory_usage(enable_memory_logging)
+
     last_hash = get_file_hash(CONFIG_PATH)
+    last_config_check_minute = -1
 
     # Initialize RadioPlayer
     radio_player = RadioPlayer(audio_device)
@@ -402,24 +409,31 @@ def main():
                     logging.info(f"Finished playing {audio_files[file_index]}.")
                     file_index = (file_index + 1) % len(audio_files)
                     radio_player.play_file(audio_files[file_index])
+                    # 2. Logged after every audio file switch.
+                    log_memory_usage(enable_memory_logging)
                 elif state == vlc.State.NothingSpecial or state == vlc.State.Stopped:
                     logging.info("Within time window, starting playback.")
                     radio_player.play_file(audio_files[file_index])
+                    # 2. Logged after every audio file switch (initial start).
+                    log_memory_usage(enable_memory_logging)
             else:
                 state = radio_player.get_state()
                 if state != vlc.State.Stopped and state != vlc.State.NothingSpecial:
                      radio_player.stop()
+                     # 3. Logged in every end of day when script stops playing.
+                     log_memory_usage(enable_memory_logging)
         else: # No audio files loaded
             state = radio_player.get_state()
             if state != vlc.State.Stopped and state != vlc.State.NothingSpecial:
                  radio_player.stop()
+                 # 3. Logged in every end of day when script stops playing.
+                 log_memory_usage(enable_memory_logging)
 
         # Check if the configuration file content has changed at specified intervals / Kontrollige, kas konfiguratsioonifaili sisu on muutunud määratud intervallidega
-        if (datetime.now() - timedelta(minutes=config_check_interval)).minute % config_check_interval == 0:
+        current_minute = datetime.now().minute
+        if (datetime.now() - timedelta(minutes=config_check_interval)).minute % config_check_interval == 0 and current_minute != last_config_check_minute:
+            last_config_check_minute = current_minute
             current_hash = get_file_hash(CONFIG_PATH)
-
-            # Also log memory usage periodically
-            log_memory_usage()
 
             if current_hash != last_hash:
                 config = load_config(CONFIG_PATH)  # Load the updated configuration file / Laadige uuendatud konfiguratsioonifail
@@ -433,6 +447,7 @@ def main():
                 time_before_opening = config['time_before_opening']
                 time_after_closing = config['time_after_closing']
                 config_check_interval = config['config_check_interval']
+                enable_memory_logging = config.get('enable_memory_logging', False) # Update memory logging setting
                 announcements = get_today_announcements(config)
                 start_time = (datetime.combine(datetime.now(), open_time) - timedelta(minutes=time_before_opening)).time()
                 end_time = (datetime.combine(datetime.now(), close_time) + timedelta(minutes=time_after_closing)).time()
