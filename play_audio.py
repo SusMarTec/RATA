@@ -8,6 +8,7 @@ import logging
 import hashlib
 import subprocess
 import re
+import resource
 from typing import Union
 
 # Define working directories and file paths / Määrake töökaustad ja failiteed
@@ -68,6 +69,109 @@ def setup_logging():
 # Initial call to set up logging when the script starts. / Esmane logimise seadistamise kutse skripti käivitamisel.
 # This replaces the old setup_logging() call at the module level.
 setup_logging()
+
+def log_memory_usage():
+    try:
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux returns ru_maxrss in kilobytes.
+        logging.info(f"Memory Usage (RSS): {usage} KB")
+    except Exception as e:
+        logging.error(f"Failed to log memory usage: {e}")
+
+class RadioPlayer:
+    def __init__(self, audio_device_name):
+        self.audio_device_name = audio_device_name
+        self.instance = None
+        self.player = None
+        self.current_volume = 100
+        self._init_vlc()
+
+    def _init_vlc(self):
+        # Release existing resources if any
+        if self.player:
+            self.player.release()
+            self.player = None
+        if self.instance:
+            self.instance.release()
+            self.instance = None
+
+        args = ['--aout=alsa']
+        if self.audio_device_name:
+             args.append(f'--alsa-audio-device={self.audio_device_name}')
+        else:
+             logging.warning("No audio device provided to RadioPlayer, using default device.")
+
+        try:
+            self.instance = vlc.Instance(*args)
+            self.player = self.instance.media_player_new()
+            logging.info(f"Initialized VLC Instance with device: {self.audio_device_name}")
+        except Exception as e:
+             logging.error(f"Failed to initialize VLC: {e}")
+
+    def play_file(self, file_path, volume=None):
+        if not self.instance or not self.player:
+             logging.error("VLC not initialized, cannot play.")
+             return
+
+        if not os.path.exists(file_path):
+            logging.error(f"File not found: {file_path}")
+            return
+
+        if volume is not None:
+             self.current_volume = volume
+
+        media = self.instance.media_new(file_path)
+        self.player.set_media(media)
+        self.player.audio_set_volume(self.current_volume)
+        self.player.play()
+        logging.info(f"Started playing {file_path} with volume {self.current_volume}.")
+
+    def stop(self):
+        if self.player:
+            self.player.stop()
+            logging.info("Stopped playback.")
+
+    def set_volume(self, volume):
+        self.current_volume = volume
+        if self.player:
+            self.player.audio_set_volume(volume)
+
+    def get_state(self):
+        if self.player:
+            return self.player.get_state()
+        return vlc.State.NothingSpecial
+
+    def play_announcement(self, file_path):
+        if not self.instance:
+            return
+
+        if not os.path.exists(file_path):
+            logging.error(f"Announcement file not found: {file_path}")
+            return
+
+        # Create a temporary player from the same instance
+        temp_player = self.instance.media_player_new()
+        media = self.instance.media_new(file_path)
+        temp_player.set_media(media)
+        temp_player.audio_set_volume(100)
+        temp_player.play()
+        logging.info(f"Playing announcement: {file_path}")
+
+        while temp_player.get_state() != vlc.State.Ended:
+            time.sleep(0.5)
+
+        temp_player.stop()
+        temp_player.release()
+        logging.info("Announcement finished.")
+
+    def update_device(self, new_device_name):
+        if new_device_name != self.audio_device_name:
+            logging.info(f"Audio device changed from {self.audio_device_name} to {new_device_name}. Reinitializing VLC.")
+            self.audio_device_name = new_device_name
+            self.stop()
+            self._init_vlc()
+            return True
+        return False
 
 # Function to load configuration file / Funktsioon konfiguratsioonifaili laadimiseks
 def load_config(file_path):
@@ -176,40 +280,6 @@ def detect_raspberry_pi_audio_device() -> Union[str, None]:
     logging.warning(f"Attempting to use common device: {common_devices[0]} as a fallback. This is a guess.")
     return common_devices[0] # Return the first common device as a last attempt
 
-    # If all detection methods fail:
-    # logging.warning("Auto-detection failed to find any suitable audio device.")
-    # return None # Original plan was to return None if all fails.
-                  # The user feedback suggested continuing, implying we might not play audio.
-                  # The fallback to common_devices[0] is a compromise.
-                  # If this is also not desired, change to `return None`.
-
-# Function to play a single audio file / Funktsioon ühe heli faili mängimiseks
-def play_audio(file, audio_device_name, volume=100):
-    if not audio_device_name: # Handles None or empty string
-        logging.error("Audio device not determined (neither configured nor auto-detected). Cannot initialize player or play audio.")
-        return None, None # Return None for both player and instance
-    file_path = os.path.join(WORKING_DIR, file)
-    if not os.path.exists(file_path):
-        logging.error(f"File not found: {file_path}")
-        return None, None
-    instance = vlc.Instance('--aout=alsa', f'--alsa-audio-device={audio_device_name}')  # Set VLC to use specific ALSA device
-    player = instance.media_player_new()
-    media = instance.media_new(file_path)
-    player.set_media(media)
-    player.audio_set_volume(volume)  # Set the volume here / Määrake siin helitugevus
-    player.play()
-    logging.info(f"Started playing {file_path} with volume {volume}.")
-    
-    return player, instance
-
-# Function to stop audio playback / Funktsioon heli taasesituse peatamiseks
-def stop_audio(player, instance):
-    if player:
-        player.stop()
-        player.release()
-        instance.release()
-        logging.info("Stopped playing audio file and released the player.")
-
 # Function to check if the configuration file content has changed / Funktsioon kontrollimaks, kas konfiguratsioonifaili sisu on muutunud
 def get_file_hash(file_path):
     hasher = hashlib.md5()
@@ -276,8 +346,10 @@ def main():
     logging.info(f"Today's announcements: {announcements}")
 
     last_hash = get_file_hash(CONFIG_PATH)
-    player = None
-    instance = None
+
+    # Initialize RadioPlayer
+    radio_player = RadioPlayer(audio_device)
+
     last_announcement_time = None
     audio_files = [] # Initialize empty list for audio files
     file_index = 0
@@ -311,41 +383,44 @@ def main():
             announcement_file = announcements[now_str]
             if last_announcement_time != now_str:
                 logging.info(f"Playing announcement: {announcement_file} at {now_str}")
-                if player:
-                    player.audio_set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
-                announcement_player, announcement_instance = play_audio(announcement_file, audio_device, volume=100)  # Play announcement at full volume / Mängige teadaanne täieliku helitugevusega
-                while announcement_player.get_state() != vlc.State.Ended:
-                    time.sleep(1)
-                stop_audio(announcement_player, announcement_instance)
-                if player:
-                    player.audio_set_volume(100)  # Restore background music volume / Taastage taustamuusika helitugevus
+
+                radio_player.set_volume(20)  # Reduce background music volume / Vähendage taustamuusika helitugevust
+
+                # Ensure full path is used for announcements
+                announcement_path = os.path.join(WORKING_DIR, announcement_file)
+                radio_player.play_announcement(announcement_path)
+
+                radio_player.set_volume(100)  # Restore background music volume / Taastage taustamuusika helitugevus
+
                 last_announcement_time = now_str
 
         # Play background music / Mängige taustamuusikat
         if audio_files: # Only attempt to play if there are audio files loaded
             if is_time_between(start_time, end_time):
-                if player is None:
-                    logging.info("Within time window, starting playback.")
-                    player, instance = play_audio(audio_files[file_index], audio_device)
-                elif player.get_state() == vlc.State.Ended:
+                state = radio_player.get_state()
+                if state == vlc.State.Ended:
                     logging.info(f"Finished playing {audio_files[file_index]}.")
-                    stop_audio(player, instance)
                     file_index = (file_index + 1) % len(audio_files)
-                    player, instance = play_audio(audio_files[file_index], audio_device)
+                    radio_player.play_file(audio_files[file_index])
+                elif state == vlc.State.NothingSpecial or state == vlc.State.Stopped:
+                    logging.info("Within time window, starting playback.")
+                    radio_player.play_file(audio_files[file_index])
             else:
-                if player is not None:
-                    stop_audio(player, instance)
-                    player = None
-                    instance = None
+                state = radio_player.get_state()
+                if state != vlc.State.Stopped and state != vlc.State.NothingSpecial:
+                     radio_player.stop()
         else: # No audio files loaded
-            if player is not None: # Stop player if it was somehow playing
-                stop_audio(player, instance)
-                player = None
-                instance = None
+            state = radio_player.get_state()
+            if state != vlc.State.Stopped and state != vlc.State.NothingSpecial:
+                 radio_player.stop()
 
         # Check if the configuration file content has changed at specified intervals / Kontrollige, kas konfiguratsioonifaili sisu on muutunud määratud intervallidega
         if (datetime.now() - timedelta(minutes=config_check_interval)).minute % config_check_interval == 0:
             current_hash = get_file_hash(CONFIG_PATH)
+
+            # Also log memory usage periodically
+            log_memory_usage()
+
             if current_hash != last_hash:
                 config = load_config(CONFIG_PATH)  # Load the updated configuration file / Laadige uuendatud konfiguratsioonifail
                 if config is None:
@@ -365,6 +440,26 @@ def main():
                 logging.info(f"Reloaded updated config file: start time: {start_time}, end time: {end_time}")
                 logging.info(f"Today's announcements: {announcements}")
                 
+                # Check for audio device change
+                audio_device_from_config = config.get('audio_output_device')
+                new_audio_device = audio_device
+
+                if audio_device_from_config and audio_device_from_config.strip():
+                    new_audio_device = audio_device_from_config.strip()
+                else:
+                    # Auto detect again if not in config?
+                    # Original code didn't auto-detect again unless it was starting up, but logically we should if we want to support switching to auto-detect.
+                    # For safety, let's just stick to config value if present.
+                    # If empty in config, we might want to auto-detect.
+                    if 'audio_output_device' in config and not config['audio_output_device']:
+                         detected = detect_raspberry_pi_audio_device()
+                         if detected:
+                             new_audio_device = detected
+
+                # Update device in player
+                if radio_player.update_device(new_audio_device):
+                    audio_device = new_audio_device
+
                 # Reload audio files based on new config
                 music_folder_path_config = config.get('background_music_folder')
                 if music_folder_path_config and os.path.isdir(music_folder_path_config):
@@ -378,21 +473,16 @@ def main():
 
                 # Check if we should be playing music / Kontrollige, kas peaksime muusikat mängima
                 if audio_files:
-                    if is_time_between(start_time, end_time) and (player is None or player.get_state() == vlc.State.Ended):
-                        logging.info("Config file changed and within time window, starting playback.")
-                        file_index = 0 # Reset file index
-                        if player is not None: # Stop existing player before starting new one
-                            stop_audio(player, instance)
-                        player, instance = play_audio(audio_files[file_index], audio_device)
-                    elif not is_time_between(start_time, end_time) and player is not None:
-                        stop_audio(player, instance)
-                        player = None
-                        instance = None
+                    if is_time_between(start_time, end_time):
+                        state = radio_player.get_state()
+                        if state == vlc.State.NothingSpecial or state == vlc.State.Stopped or state == vlc.State.Ended:
+                             logging.info("Config file changed and within time window, starting/restarting playback.")
+                             file_index = 0
+                             radio_player.play_file(audio_files[file_index])
+                    else:
+                         radio_player.stop()
                 else: # No audio files after config reload
-                    if player is not None:
-                        stop_audio(player, instance)
-                        player = None
-                    instance = None
+                    radio_player.stop()
 
         time.sleep(1)  # Check frequently for state changes / Kontrollige sageli olekumuutusi
 
