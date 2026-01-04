@@ -274,13 +274,27 @@ def detect_raspberry_pi_audio_device() -> Union[str, None]:
     # Fallback to common ALSA names if 'aplay -l' fails or yields no suitable device
     logging.info("Falling back to trying common ALSA device names for Raspberry Pi.")
     common_devices = ["hw:0,0", "hw:1,0"] # Common for headphone jack on different Pi models
-    # Note: Without 'aplay -l', we can't be sure these exist or are headphones.
-    # For this implementation, we'll just return the first one as a guess.
-    # A more robust check would involve trying to query these devices.
-    # However, for now, we'll just pick the first as a last resort fallback.
-    # A user should ideally configure explicitly if aplay -l fails.
-    logging.warning(f"Attempting to use common device: {common_devices[0]} as a fallback. This is a guess.")
-    return common_devices[0] # Return the first common device as a last attempt
+
+    for device in common_devices:
+        # device string format is "hw:X,Y". We need to check for /dev/snd/pcmCXDYp
+        try:
+            parts = device.split(':')
+            if len(parts) == 2:
+                card_device = parts[1].split(',')
+                if len(card_device) == 2:
+                    card = card_device[0]
+                    dev = card_device[1]
+                    # Check for playback device file existence
+                    # Standard ALSA device file: /dev/snd/pcmC{card}D{device}p (p for playback, c for capture)
+                    device_path = f"/dev/snd/pcmC{card}D{dev}p"
+                    if os.path.exists(device_path):
+                        logging.info(f"Verified existence of fallback device: {device} (found {device_path})")
+                        return device
+        except Exception as e:
+            logging.error(f"Error checking device existence for {device}: {e}")
+
+    logging.warning("No common ALSA devices (hw:0,0 or hw:1,0) found via file check.")
+    return None # Return None to let RadioPlayer use system default
 
 # Function to check if the configuration file content has changed / Funktsioon kontrollimaks, kas konfiguratsioonifaili sisu on muutunud
 def get_file_hash(file_path):
