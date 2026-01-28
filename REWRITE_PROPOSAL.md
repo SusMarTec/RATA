@@ -61,7 +61,7 @@ This option modernizes the current codebase, adding a web UI and replacing VLC, 
 *   **Language:** Python 3.11+
 *   **Web Framework:** `NiceGUI` (Built on FastAPI + Vue.js). Excellent for creating local device interfaces quickly.
 *   **Audio Playback:** `miniaudio` (Python bindings). A self-contained dependency-free audio library. *Replaces VLC.*
-*   **Packaging:** `PyInstaller` (Bundles Python interpreter and scripts).
+*   **Packaging:** **Docker** or Standard Python Venv (No Single Binary).
 
 ### Architecture
 1.  **Event Loop:** The main thread runs the `NiceGUI`/`FastAPI` async event loop.
@@ -72,15 +72,15 @@ This option modernizes the current codebase, adding a web UI and replacing VLC, 
 ### Pros & Cons
 | Pros | Cons |
 | :--- | :--- |
-| **Speed:** Extremely fast development cycle. | **Distribution:** "Single Binary" is a hack (self-extracting archive). Startup is slower. |
-| **Ecosystem:** Massive library availability. | **Cross-Compile:** Hard. You must build the binary *on* the target OS (or use QEMU). |
+| **Speed:** Extremely fast development cycle. | **No Single Binary:** Requires installing Python/dependencies or running Docker. |
+| **Ecosystem:** Massive library availability. | **Deployment:** More complex for end-users compared to a simple file download. |
 | **Simplicity:** Easier for less experienced contributors to modify. | **Runtime Errors:** Python is less strict; bugs may appear at runtime. |
 
 ### Roadmap
 1.  **Refactor:** Replace `python-vlc` with `miniaudio`.
 2.  **UI:** Implement `NiceGUI` interface for config editing.
 3.  **Service:** Integrate systemd management into the UI.
-4.  **Build:** Create Docker containers for building ARM binaries.
+4.  **Build:** Create Docker containers for distribution.
 
 ---
 
@@ -88,8 +88,8 @@ This option modernizes the current codebase, adding a web UI and replacing VLC, 
 
 | Feature | Rust (RATA-N) | Python (RATA-N) |
 | :--- | :--- | :--- |
-| **Single Binary** | Native, small (~10MB) | Bundled, large (~50MB+) |
-| **Cross-Platform Build** | Easy (`cross build`) | Hard (Build on Target) |
+| **Single Binary** | Native, small (~10MB) | **No** (Docker / Venv) |
+| **Cross-Platform Build** | Easy (`cross build`) | N/A (Source/Container) |
 | **Memory Usage** | < 20MB | > 100MB |
 | **Audio Dependency** | `rodio` (Pure Rust) | `miniaudio` (C Binding) |
 | **Web UI Responsiveness**| Instant | Fast (WebSocket) |
