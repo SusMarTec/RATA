@@ -1,76 +1,53 @@
-# Specify the audio output device (e.g., hw:1,0 for ALSA).
-# If left empty or this key is commented out/removed, the script will attempt
-# to auto-detect the Raspberry Pi headphone jack.
-# If auto-detection fails, an error will be logged, and no audio will play
-# until a device is explicitly configured.
-audio_output_device = "hw:1,0"
-# Default opening and closing times
-default_open_time = "09:00"
-default_close_time = "21:00"
+# RATA Configuration
+# Optimized for TOML v1.1.0
 
-# Time in minutes before opening and after closing to play the music
+# --- AUDIO & MEDIA SETTINGS ---
+# The hardware address for audio output (e.g., "hw:1,0"). Leave empty for auto-detect.
+audio_output_device = "hw:1,0"
+
+# Background music directory. Defaults to "bgmusic" folder in the app directory.
+# Can be a relative path or an absolute path like "/home/user/music".
+background_music_folder = "bgmusic"
+
+# --- SYSTEM BEHAVIOR ---
+# Interval in minutes to check this file for changes.
+config_check_interval = 120
+
+# Set to true only for system performance troubleshooting.
+enable_memory_logging = false
+
+# --- OPERATING HOURS ---
+# Default times used if no daily override is set. Format: HH:MM (v1.1.0 Local Time).
+default_open_time = 09:00
+default_close_time = 21:00
+
+# Buffer times (in minutes) to play music before opening and after closing.
 time_before_opening = 15
 time_after_closing = 15
 
-# Interval in minutes to check the configuration file for changes
-config_check_interval = 120
+# --- WEEKLY SCHEDULE ---
+# Daily overrides for opening and closing times.
+# Empty tables {} will fall back to the default operating hours.
+[weekly_schedule]
+monday    = { open_time = 11:00, close_time = 18:30 }
+tuesday   = {}
+wednesday = {}
+thursday  = {}
+friday    = {}
+saturday  = {}
+sunday    = {}
 
-# Enable or disable memory usage logging (useful for troubleshooting)
-enable_memory_logging = false
+# --- ANNOUNCEMENTS ---
+# Global announcements that play every day. Format: "HH:MM" = "filename.mp3"
+# Example: default_announcements = { "12:00" = "noon_chime.mp3" }
+default_announcements = {}
 
-# Specify the folder for background music.
-# If commented out or left empty, the script will look for a 'bgmusic' folder
-# in the working directory (e.g., ~/Radio/bgmusic).
-# background_music_folder = "/path/to/your/music"
-
-# Weekly schedule for opening and closing times
-[weekly_schedule.monday]
-# This is example time what differs from default times.
-# open_time = "11:00"
-# close_time = "18:30"
-
-[weekly_schedule.tuesday]
-# No specific time, uses default
-
-[weekly_schedule.wednesday]
-# No specific time, uses default
-
-[weekly_schedule.thursday]
-# No specific time, uses default
-
-[weekly_schedule.friday]
-# No specific time, uses default
-
-[weekly_schedule.saturday]
-# No specific time, uses default
-
-[weekly_schedule.sunday]
-# No specific time, uses default
-
-# Default announcements schedule
-[default_announcements]
-# This is example of default announcement.
-# "12:30" = "someaudiofile.mp3"
-# "13:30" = "someotheraudiofile.wav"
-
-# Weekly schedule for announcements
-[announcements.monday]
-# No specific announcements, uses default
-
-[announcements.tuesday]
-# No specific announcements, uses default
-
-[announcements.wednesday]
-# No specific announcements, uses default
-
-[announcements.thursday]
-# No specific announcements, uses default
-
-[announcements.friday]
-# No specific announcements, uses default
-
-[announcements.saturday]
-# No specific announcements, uses default
-
-[announcements.sunday]
-# No specific announcements, uses default
+# Specific announcement overrides for each day of the week.
+[announcements]
+monday    = {}
+tuesday   = {}
+wednesday = {}
+thursday  = {}
+friday    = {}
+saturday  = {}
+sunday    = {}

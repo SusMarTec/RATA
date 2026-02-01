@@ -5,160 +5,90 @@ It's built with the idea that if something works reliably, you stick with it. Yo
 
 As an IT technician myself, I use this exact script across a chain of stores. It perfectly fulfills its purpose as a low-cost solution that simply works, which means management doesn't have a reason to complain. It's the kind of practical tool that solves a problem without creating new ones.
 
-Key things to know:
+## Technical Stuff
+* **Standard:** Config optimized for TOML v1.1.0 
+* **Language:** Python 3.1 or newer (Python 3.11+ recommended).
+* **Dependencies:** `tomli` and `vlc`.
+* **Tested on:** Raspbian Bullseye and Raspbian Bookworm.
 
-What it is: A simple Python script for playing background audio and scheduled announcements.
-
-What it's for: Keeping your store's atmosphere consistent with music and making sure important messages get heard, all automated. It's a reliable, budget-friendly option that keeps operations smooth.
-
-Technical stuff: It's designed to run on Python 3.1 or newer.
-
-Development style: This project gets updates when the developer either feels like adding something new, or more importantly, when there's an actual need to make it work with newer systems or fix something. It's not on a strict release schedule, but it gets the job done.
-
-Tested on: We've confirmed it works well on Raspbian Bullseye and Raspbian Bookworm.
-
-In short: it's a solid, practical tool for a specific job, built to just get out of your way and play some audio, proving its value where it counts: in real-world operations.
-
-## Prerequisites
+## Installation
 
 Make sure your Raspberry Pi is up to date:
-
 ```sh
-sudo apt update
-sudo apt upgrade
+sudo apt update && sudo apt upgrade
 ```
-## Dependencies
-This project requires the following dependencies to be installed:
 
-Python packages:
-   - `toml`
-   - `vlc`
-
-I have have not tested on env so i install these system wide.
-
-env testing is "to-do"
+### 1. Dependencies
+This project requires the VLC player and the `tomli` library for TOML v1.1.0 support:
 ```sh
-sudo apt install python3-toml python3-vlc
+sudo apt install python3-vlc alsa-utils
+pip install tomli
 ```
-Add `python3` into mix if you are not sure if it is latest version for your dist.
-But it should be updated if you already did `sudo apt upgrade`
 
-Also make sure that ALSA utils is installed
+### 2. Audio Device
+Find your audio device hardware address using:
 ```sh
-sudo apt-get install vlc alsa-utils
-```
-
-## Finding the Correct Audio Device
-
-To find the correct audio device for your setup, use the following command:
-```
 aplay -l
 ```
-
-This will list all the audio playback devices available. Look for the device that corresponds to your headphones or desired audio output. For example, you might see something like this:
-
-```
-**** List of PLAYBACK Hardware Devices ****
-card 0: vc4hdmi0 [vc4-hdmi-0], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-card 1: vc4hdmi1 [vc4-hdmi-1], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-card 2: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]
-  Subdevices: 8/8
-  Subdevice #0: subdevice #0
-  Subdevice #1: subdevice #1
-  Subdevice #2: subdevice #2
-  Subdevice #3: subdevice #3
-  Subdevice #4: subdevice #4
-  Subdevice #5: subdevice #5
-  Subdevice #6: subdevice #6
-  Subdevice #7: subdevice #7
-```
-In this example, you might use hw:2,0 for the headphones.
+Look for your desired output (e.g., `hw:1,0`) and use it in the configuration.
 
 ## Configuration
 
-Make sure you have a `config.toml` file in the `~/Radio/` directory (or your chosen `WORKING_DIR`). An example configuration file (`config.toml`) is provided in the repository.
+RATA now uses the TOML v1.1.0 specification, which allows for much cleaner scheduling. Create a `config.toml` in your working directory (default: `~/Radio/`).
+
+### Native Time Syntax
+No more "hacked" strings – use native local time:
+```toml
+audio_output_device = "hw:1,0"
+default_open_time = 09:00   # Native HH:MM format
+default_close_time = 21:00
+
+[weekly_schedule]
+monday = { open_time = 11:00, close_time = 18:30 }
+tuesday = {} # Falls back to defaults
+```
 
 ### Background Music
+* Create a folder named `bgmusic` in your working directory.
+* Drop your `.mp3` or `.wav` files there.
+* The script will loop everything it finds in that folder.
 
-There are two ways to configure the background music:
+## Setup the Service (Systemd)
 
-1.  **Default Folder:**
-    *   Create a folder named `bgmusic` inside your working directory (e.g., `~/Radio/bgmusic/`).
-    *   Place your audio files (e.g., `.mp3`, `.wav`) into this `bgmusic` folder.
-    *   If the `background_music_folder` option in `config.toml` is commented out or empty, the script will automatically use this `bgmusic` folder.
+To make it run as a background service that survives reboots:
 
-2.  **Custom Folder via `config.toml`:**
-    *   Open your `config.toml` file.
-    *   Find or add the `background_music_folder` key.
-    *   Set its value to the absolute path of your desired music folder. For example:
-        ```toml
-        background_music_folder = "/home/pi/my_music_collection"
-        ```
-    *   Ensure this folder exists and contains your audio files.
-
-If neither a custom folder is specified and valid, nor the default `bgmusic` folder exists or contains music, no background music will be played.
-
-The script will play all supported audio files from the chosen folder in a loop.
-
-## Setup the Service
-
-Create a systemd service file to manage the script as a service.
-
-1. Create a service file:
-```
+1. Create the service file:
+```sh
 sudo nano /etc/systemd/system/radio.service
 ```
-2. Add the following content to the radio.service file:
-If you are not using rasbian default pi user you can change user= to desired one.
-```
+
+2. Add this content (change `User` if you're not using the default `pi` user):
+```ini
 [Unit]
-Description=Radio Player Service
+Description=RATA Player Service
 After=multi-user.target
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/python3 /home/pi/Radio/play_audio.py
 WorkingDirectory=/home/pi/Radio
-StandardOutput=journal
-StandardError=journal
 Restart=always
 User=pi
 
 [Install]
 WantedBy=multi-user.target
 ```
-3. Reload systemd to recognize the new service:
-```
+
+3. Enable and start:
+```sh
 sudo systemctl daemon-reload
-```
-4. Enable and start service
-```
 sudo systemctl enable radio.service
 sudo systemctl start radio.service
 ```
+
 ## Logs
-To view the logs for the service, use the following command:
+To see what's going on in real-time:
+```sh
+sudo journalctl -u radio.service -f
 ```
-sudo journalctl -u radio.service
-```
-You can also see logs under logs folder where script working logs are.
-
-### Troubleshooting / Advanced Configuration
-
-If you experience issues with the script's stability or long-term operation, you might consider setting up scheduled tasks via crontab. These are examples and may need adjustment based on your specific setup (e.g., service name if you run this as a service).
-
-To edit your crontab, run `crontab -e`.
-
-```cron
-# Daily reboot at 5:00 AM (helps clear system state)
-0 5 * * * sudo shutdown -r now
-
-# Daily restart of the radio service at 7:00 AM (ensure the script is freshly started)
-# Replace 'radio.service' with your actual service name if different.
-0 7 * * * sudo systemctl restart radio.service
-```
-**Note:** Regularly rebooting or restarting services can help maintain stability but might also indicate underlying issues that could be investigated further.
+Working logs are also saved daily in the `logs/` folder inside your working directory.
